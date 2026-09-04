@@ -1,0 +1,5 @@
+.build/
+dist/
+*.png
+__pycache__/
+*.pyc
