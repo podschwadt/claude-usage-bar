@@ -58,6 +58,7 @@ check("requests 55", d["activity"]["requests"] == 55)
 check("activity flagged local", d["activity"]["local_only"] is True)
 s = d["metrics"]["session"]["reset"]["seconds_until"]
 check("session resets in ~17min", s is not None and 900 < s < 1100, f"got {s}")
+check("no plan field", "plan" not in d, "parser reports times and percentages only")
 
 print("renamed tiers (the dangerous case)")
 d = parse_usage(RENAMED, now=NOW)

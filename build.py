@@ -46,7 +46,7 @@ def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, check=True, cwd=ROOT, **kw)
 
 
-def build_app(dest_dir: Path) -> Path:
+def build_app(dest_dir: Path, sign: str) -> Path:
     print("compiling (release)")
     run(["swift", "build", "-c", "release"])
     binary_src = Path(
@@ -79,9 +79,12 @@ def build_app(dest_dir: Path) -> Path:
     with open(app / "Contents" / "Info.plist", "wb") as fh:
         plistlib.dump(INFO_PLIST, fh)
 
-    # Ad-hoc signature: enough for a locally built app to launch cleanly.
-    print("signing (ad-hoc)")
-    run(["codesign", "--force", "--sign", "-", str(app)])
+    # Ad-hoc (`-`, the default) is enough for a locally built app to launch
+    # cleanly, but each ad-hoc sign is a new identity, so macOS resets TCC
+    # grants on every rebuild; pass --sign with a persistent identity to
+    # avoid that (see README).
+    print(f"signing ({sign})")
+    run(["codesign", "--force", "--sign", sign, str(app)])
     return app
 
 
@@ -90,11 +93,13 @@ def main() -> int:
     ap.add_argument("--install", action="store_true", help="copy into /Applications")
     ap.add_argument("--run", action="store_true", help="relaunch the app after building")
     ap.add_argument("--dest", default="dist", help="output directory (default: dist)")
+    ap.add_argument("--sign", default="-",
+                     help="codesign identity (default: '-' ad-hoc)")
     args = ap.parse_args()
 
     dest_dir = (ROOT / args.dest).resolve()
     dest_dir.mkdir(parents=True, exist_ok=True)
-    app = build_app(dest_dir)
+    app = build_app(dest_dir, args.sign)
 
     if args.install:
         target = Path("/Applications") / APP_NAME
