@@ -1,4 +1,5 @@
 import AppKit
+import ClaudeUsageBarCore
 
 /// Menu bar only: no dock icon, no windows. LSUIElement is set in Info.plist,
 /// and .accessory here covers running the binary directly during development.

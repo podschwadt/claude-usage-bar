@@ -42,7 +42,6 @@ ACTIVITY_RE = re.compile(
     r"(?:\s*·\s*(?P<sessions>\d+)\s+sessions)?",
     re.IGNORECASE,
 )
-PLAN_RE = re.compile(r"^You are currently using (?P<plan>.+?)\s*$", re.MULTILINE)
 # "Sep 4 at 1:40pm (America/Denver)" -> naive stamp + optional tz name
 RESET_RE = re.compile(r"^(?P<stamp>.+?)\s*(?:\((?P<tz>[A-Za-z_]+/[A-Za-z_+-]+)\))?\s*$")
 # Anchored to a leap year so "Feb 29" parses; the year is replaced below.
@@ -131,7 +130,6 @@ def parse_usage(text: str, now: datetime | None = None) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "schema_ok": not missing,
         "missing_keys": missing,
-        "plan": (p.group("plan").strip() if (p := PLAN_RE.search(text)) else None),
         "metrics": metrics,
         "activity": activity,
     }

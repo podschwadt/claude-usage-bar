@@ -5,7 +5,7 @@ import Foundation
 /// A GUI app launched from Finder inherits a minimal PATH that does not
 /// include ~/.local/bin, so both the interpreter and the `claude` binary are
 /// resolved by absolute path rather than trusted to PATH lookup.
-final class UsageFetcher {
+package final class UsageFetcher {
 
     private let queue = DispatchQueue(label: "com.claudeusagebar.fetch", qos: .utility)
     private let timeout: TimeInterval = 45
@@ -42,12 +42,16 @@ final class UsageFetcher {
         return nil
     }
 
-    /// Last resort: ask a login shell, which sources the user's profile and so
-    /// knows about PATH additions this app cannot see.
-    private func resolveViaLoginShell(_ tool: String) -> String? {
+    /// Last resort: ask a non-login shell to resolve the tool. Non-login
+    /// (`-c`, not `-lc`) so a background poller does not source the user's
+    /// login dotfiles on every fetch; the candidate lists above and `PATH`
+    /// set on the child process already cover the standard install
+    /// locations, so this only fires for genuinely unusual setups.
+    private func resolveViaShell(_ tool: String, cwd: URL?) -> String? {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        p.arguments = ["-lc", "command -v \(tool)"]
+        p.arguments = ["-c", "command -v \(tool)"]
+        p.currentDirectoryURL = cwd
         let out = Pipe()
         p.standardOutput = out
         p.standardError = Pipe()
@@ -66,9 +70,9 @@ final class UsageFetcher {
         }
         // Running straight out of the source tree (swift run).
         let dev = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // ClaudeUsageBar
-            .deletingLastPathComponent()   // Sources
-            .deletingLastPathComponent()   // repo root
+            .deletingLastPathComponent()  // ClaudeUsageBarCore
+            .deletingLastPathComponent()  // Sources
+            .deletingLastPathComponent()  // repo root
             .appendingPathComponent("parser/claude_usage.py")
         return FileManager.default.isReadableFile(atPath: dev.path) ? dev.path : nil
     }
@@ -83,31 +87,48 @@ final class UsageFetcher {
     }
 
     private func fetchSync() -> UsageSnapshot {
-        guard let python = override("pythonBin").flatMap({ firstExecutable([$0]) })
-            ?? firstExecutable(Self.pythonCandidates)
-            ?? resolveViaLoginShell("python3")
+        // Both spawned processes below pin this as their cwd. Left unset, a
+        // subprocess inherits the app's cwd -- `/` when launched from
+        // Finder -- and Claude Code scans its cwd for workspace context,
+        // which from `/` can reach TCC-protected locations (network
+        // volumes, etc.). The app-support dir is benign, but this runs
+        // on EVERY poll, so a `try!` here would
+        // crash-loop the whole app on a one-off failure (a regular file at
+        // the path, EPERM, ENOSPC): a missing cwd instead degrades to
+        // inheriting the app's own cwd, same as an unset `currentDirectoryURL`.
+        let cwd = try? HistoryStore.appSupportDirectory()
+
+        guard
+            let python = override("pythonBin").flatMap({ firstExecutable([$0]) })
+                ?? firstExecutable(Self.pythonCandidates)
+                ?? resolveViaShell("python3", cwd: cwd)
         else { return .failure("No python3 found (looked in /usr/bin, Homebrew, PATH).") }
 
         guard let script = parserScriptPath() else {
             return .failure("Bundled parser claude_usage.py is missing.")
         }
 
-        guard let claude = override("claudeBin").flatMap({ firstExecutable([$0]) })
-            ?? firstExecutable(Self.claudeCandidates)
-            ?? resolveViaLoginShell("claude")
+        guard
+            let claude = override("claudeBin").flatMap({ firstExecutable([$0]) })
+                ?? firstExecutable(Self.claudeCandidates)
+                ?? resolveViaShell("claude", cwd: cwd)
         else {
-            return .failure("Could not find the claude CLI. Set it with:\n"
-                            + "defaults write com.claudeusagebar.app claudeBin /path/to/claude")
+            return .failure(
+                "Could not find the claude CLI. Set it with:\n"
+                    + "defaults write com.claudeusagebar.app claudeBin /path/to/claude")
         }
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: python)
         proc.arguments = [script, "--claude-bin", claude, "--timeout", "30"]
+        proc.currentDirectoryURL = cwd
         // Give the child a usable PATH even though ours is minimal.
         var env = ProcessInfo.processInfo.environment
         let claudeDir = (claude as NSString).deletingLastPathComponent
-        env["PATH"] = [claudeDir, "/usr/bin", "/bin", "/usr/sbin", "/sbin",
-                       "/opt/homebrew/bin", "/usr/local/bin"].joined(separator: ":")
+        env["PATH"] = [
+            claudeDir, "/usr/bin", "/bin", "/usr/sbin", "/sbin",
+            "/opt/homebrew/bin", "/usr/local/bin",
+        ].joined(separator: ":")
         proc.environment = env
 
         let stdout = Pipe(), stderr = Pipe()
@@ -118,13 +139,28 @@ final class UsageFetcher {
             return .failure("Could not launch parser: \(error.localizedDescription)")
         }
 
-        // Read before waiting: a full pipe buffer would otherwise deadlock.
-        let outData = stdout.fileHandleForReading.readDataToEndOfFile()
-        let errData = stderr.fileHandleForReading.readDataToEndOfFile()
-
-        // Watchdog, so a hung `claude` cannot wedge the app forever.
+        // Watchdog, so a hung `claude` cannot wedge the app forever. Scheduled
+        // on the global queue rather than `queue`: this call runs on `queue`
+        // itself (see `fetch(completion:)`), which is about to block in
+        // `waitUntilExit()` below, so a work item queued there would never
+        // get a chance to run.
         let deadline = DispatchWorkItem { if proc.isRunning { proc.terminate() } }
-        queue.asyncAfter(deadline: .now() + timeout, execute: deadline)
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: deadline)
+
+        // Drain stdout and stderr concurrently, not one after the other: if
+        // the child fills the other pipe's 64KB buffer while blocked writing
+        // to it, reading them serially deadlocks (parent blocked reading the
+        // first pipe, child blocked writing the second).
+        var errData = Data()
+        let stderrGroup = DispatchGroup()
+        stderrGroup.enter()
+        DispatchQueue.global(qos: .utility).async {
+            errData = stderr.fileHandleForReading.readDataToEndOfFile()
+            stderrGroup.leave()
+        }
+        let outData = stdout.fileHandleForReading.readDataToEndOfFile()
+        stderrGroup.wait()
+
         proc.waitUntilExit()
         deadline.cancel()
 
@@ -134,12 +170,16 @@ final class UsageFetcher {
             return .failure(err.isEmpty ? "Parser produced no output." : err)
         }
 
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return Self.decodeSnapshot(outData)
+    }
+
+    /// Decodes parser stdout into a snapshot. A static function (rather than
+    /// inline in `fetchSync`) so tests exercise this exact production path.
+    package static func decodeSnapshot(_ data: Data) -> UsageSnapshot {
         do {
-            return try decoder.decode(UsageSnapshot.self, from: outData)
+            return try JSONDecoder().decode(UsageSnapshot.self, from: data)
         } catch {
-            return .failure("Could not decode parser output: \(error.localizedDescription)")
+            return .failure("could not decode parser output: \(error.localizedDescription)")
         }
     }
 }
