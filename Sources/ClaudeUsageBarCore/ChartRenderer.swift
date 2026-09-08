@@ -21,7 +21,11 @@ package struct ChartDrawModel {
 }
 
 /// AppKit chart drawing: horizontal grid, per-series line + gradient fill,
-/// x-axis tick labels, y-axis percent labels. Straight segments only, no
+/// x-axis tick labels, y-axis percent labels. Series are painted back to
+/// front in array order, so the last series in `model.series` ends up on
+/// top of the ones before it. Fills and lines are two separate passes -
+/// every fill, then every line - so no series' line is ever veiled by a
+/// later series' translucent fill; only lines can occlude lines. Straight segments only, no
 /// smoothing, matching the iStat design spec. Assumes the caller draws
 /// inside a flipped view (see `ChartGeometry`'s own doc comment:
 /// `plotRect.minY` is a displayed 100%, `plotRect.maxY` the 0% baseline)
@@ -35,8 +39,12 @@ package enum ChartRenderer {
     private static let tickLabelAlpha: CGFloat = 0.5
     private static let tickLabelHeight: CGFloat = 12
     private static let tickLabelGap: CGFloat = 4
-    private static let fillAlphaAtLine: CGFloat = 0.5
-    private static let fillAlphaAtBaseline: CGFloat = 0.25
+    // Series lines are stroked well above hairline width so overlapping
+    // series stay distinguishable, and their fills are kept faint enough
+    // that two or three stacked gradients do not muddy into one wash.
+    private static let seriesLineWidth: CGFloat = 1.5
+    private static let fillAlphaAtLine: CGFloat = 0.28
+    private static let fillAlphaAtBaseline: CGFloat = 0.06
     private static let yAxisLabelFontSize: CGFloat = 9
     private static let yAxisLabelAlpha: CGFloat = 0.5
     private static let yAxisLabelGap: CGFloat = 4
@@ -57,7 +65,10 @@ package enum ChartRenderer {
     package static func draw(_ model: ChartDrawModel, plotRect: CGRect, scale: CGFloat) {
         drawGrid(model.gridColor, plotRect: plotRect, scale: scale)
         for series in model.series {
-            drawSeries(series, plotRect: plotRect, scale: scale)
+            drawFill(series, plotRect: plotRect)
+        }
+        for series in model.series {
+            drawLine(series)
         }
         drawTickLabels(model.tickLabels, plotRect: plotRect)
         drawYAxisLabels(model.yAxisLabels, plotRect: plotRect)
@@ -74,12 +85,13 @@ package enum ChartRenderer {
         path.stroke()
     }
 
-    /// A series with fewer than 2 points has nothing to draw a line between
-    /// and is skipped entirely (no lone dot, no empty fill).
-    private static func drawSeries(_ series: (color: NSColor, points: [CGPoint]), plotRect: CGRect, scale: CGFloat) {
+    /// The gradient under one series' line, from the line down to the 0%
+    /// baseline. A series with fewer than 2 points has nothing to draw a
+    /// line between and is skipped entirely (no lone dot, no empty fill),
+    /// here and in `drawLine`.
+    private static func drawFill(_ series: (color: NSColor, points: [CGPoint]), plotRect: CGRect) {
         guard series.points.count >= 2 else { return }
 
-        // Fill first, so the stroked line sits on top of its own gradient.
         let fillPath = NSBezierPath()
         fillPath.move(to: CGPoint(x: series.points[0].x, y: plotRect.maxY))
         for point in series.points { fillPath.line(to: point) }
@@ -102,11 +114,16 @@ package enum ChartRenderer {
                 to: CGPoint(x: plotRect.midX, y: plotRect.maxY))
             NSGraphicsContext.restoreGraphicsState()
         }
+    }
+
+    /// One series' line, drawn opaque over every fill (see `draw`).
+    private static func drawLine(_ series: (color: NSColor, points: [CGPoint])) {
+        guard series.points.count >= 2 else { return }
 
         let linePath = NSBezierPath()
         linePath.move(to: series.points[0])
         for point in series.points.dropFirst() { linePath.line(to: point) }
-        linePath.lineWidth = 1 / scale
+        linePath.lineWidth = seriesLineWidth
         series.color.setStroke()
         linePath.stroke()
     }
