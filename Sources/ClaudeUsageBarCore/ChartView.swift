@@ -90,7 +90,11 @@ final class ChartView: NSView {
             width: bounds.width - ChartRenderer.yAxisGutterWidth,
             height: bounds.height - ChartRenderer.tickLabelStripHeight)
 
-        let drawSeries = series.map {
+        // Reversed: `ChartRenderer` paints back to front, so handing it the
+        // series in reverse puts the model's first series (the primary one -
+        // week, not fable) on top, while hover readout rows below keep the
+        // model's own order.
+        let drawSeries = series.reversed().map {
             (color: $0.color, points: ChartGeometry.points(segment: $0.points, window: timeWindow, rect: plotRect))
         }
         let tickLabels = ChartGeometry.ticks(
