@@ -42,13 +42,13 @@ final class DisplayMathTests: XCTestCase {
     }
 
     func testBarColorThemes() {
-        // BarColor: eight named themes, each a valid round-trippable hex.
+        // BarColor: eight named themes, each a distinct system tint
+        // (light/dark resolution is covered in AppearanceTests).
         XCTAssertTrue(BarColor.allCases.count == 8, "BarColor has 8 cases")
-        for c in BarColor.allCases {
-            XCTAssertTrue(c.hex.count == 6, "\(c.rawValue) hex is 6 characters")
-            XCTAssertTrue(NSColor(hexString: c.hex) != nil, "\(c.rawValue) hex round-trips")
-        }
-        XCTAssertTrue(BarColor.blue.hex == "0A84FF", "blue hex")
+        let tints = BarColor.allCases.map(\.nsColor)
+        XCTAssertTrue(Set(tints).count == tints.count, "every theme maps to a distinct tint")
+        XCTAssertTrue(BarColor.blue.nsColor == .systemBlue, "blue is the system blue tint")
+        XCTAssertTrue(BarColor.graphite.nsColor == .systemGray, "graphite is the system gray tint")
     }
 
     func testHexStringParsing() {

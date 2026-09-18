@@ -16,7 +16,7 @@ package final class StatusItemController: NSObject {
         super.init()
     }
 
-    let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    package let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let fetcher = UsageFetcher()
     let panel = UsagePanelController()
     private var timer: Timer?
@@ -58,6 +58,11 @@ package final class StatusItemController: NSObject {
     /// covering server-side rollover lag.
     private static let boundaryPollGrace: TimeInterval = 2
 
+    /// KVO on the status button's `effectiveAppearance`. The menu bar's
+    /// appearance follows the wallpaper as well as Light/Dark Mode, so the
+    /// button, not `NSApp`, is what to watch.
+    private var appearanceObservation: NSKeyValueObservation?
+
     /// Owns every touch of the on-disk history store — open, insert, query,
     /// clear — confined to its own serial queue; see `HistoryCoordinator`.
     let history = HistoryCoordinator()
@@ -81,6 +86,8 @@ package final class StatusItemController: NSObject {
 
         panel.onClose = { [weak self] in self?.statusItem.button?.highlight(false) }
 
+        observeAppearance(of: button)
+
         render()  // state starts at .loading until the first fetch completes
         startTimer(seconds: state.prefs.refreshInterval)
         refresh()
@@ -103,6 +110,18 @@ package final class StatusItemController: NSObject {
             self?.countdownTimer?.invalidate()
             self?.boundaryTimer?.invalidate()
             self?.history.close()
+        }
+    }
+
+    /// Re-renders whenever `button`'s effective appearance changes. The
+    /// gauge image draws in dynamic colors but is a drawing-handler
+    /// `NSImage` that AppKit may cache as rendered, so it is regenerated
+    /// here. Should the observation ever fail to fire, the cost is one stale
+    /// image until the next poll or countdown tick. Called by `start()`;
+    /// separate so tests can install it without starting polls.
+    package func observeAppearance(of button: NSStatusBarButton) {
+        appearanceObservation = button.observe(\.effectiveAppearance) { [weak self] _, _ in
+            self?.render()
         }
     }
 

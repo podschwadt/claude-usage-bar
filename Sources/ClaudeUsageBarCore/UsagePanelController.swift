@@ -31,7 +31,7 @@ final class UsagePanel: NSPanel {
 /// Owns the panel's lifecycle and content: opening positioned against the
 /// status item button (native-menu style), closing on resign-key, and
 /// rebuilding its content on demand.
-final class UsagePanelController: NSObject, NSWindowDelegate {
+package final class UsagePanelController: NSObject, NSWindowDelegate {
     /// The status button's action fires on mouseDown, so a click landing on
     /// the button while the panel is still closing from a resign-key
     /// (click-outside) would otherwise reopen it instantly. Debouncing a
@@ -109,7 +109,7 @@ final class UsagePanelController: NSObject, NSWindowDelegate {
         onClose?()
     }
 
-    func windowDidResignKey(_ notification: Notification) {
+    package func windowDidResignKey(_ notification: Notification) {
         closePanel()
     }
 
@@ -149,8 +149,7 @@ final class UsagePanelController: NSObject, NSWindowDelegate {
     /// deliberately stock: default style, no tint, no appearance override —
     /// the same blurred glass the system's own menu bar panels (Weather,
     /// Control Center) draw, following the system appearance as they do.
-    /// Falls back to the `.hudWindow` material on older systems, the
-    /// closest public match there.
+    /// Falls back to `legacyBackground` on older systems.
     private static func background(for content: NSView, size: CGSize) -> NSView {
         let frame = CGRect(origin: .zero, size: size)
         if #available(macOS 26.0, *) {
@@ -159,8 +158,17 @@ final class UsagePanelController: NSObject, NSWindowDelegate {
             glass.contentView = content
             return glass
         }
+        return legacyBackground(for: content, size: size)
+    }
+
+    /// The pre-macOS 26 backdrop: the `.popover` material, which like the
+    /// glass follows the system appearance, as the content's dynamic colors
+    /// require. Separate from `background` so tests can reach it on systems
+    /// that take the glass path.
+    package static func legacyBackground(for content: NSView, size: CGSize) -> NSVisualEffectView {
+        let frame = CGRect(origin: .zero, size: size)
         let effectView = NSVisualEffectView(frame: frame)
-        effectView.material = .hudWindow
+        effectView.material = .popover
         effectView.blendingMode = .behindWindow
         effectView.state = .active
         effectView.wantsLayer = true
