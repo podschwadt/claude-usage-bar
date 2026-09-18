@@ -32,11 +32,12 @@ private struct Pixel {
     var lightness: CGFloat { 0.2126 * red + 0.7152 * green + 0.0722 * blue }
 }
 
-/// Renders `view` through AppKit's own display path (`cacheDisplay`) with
-/// `appearance` set on the view, the same route the live panel takes, and
-/// returns every pixel that was actually painted (alpha above a hairline
-/// threshold). No `performAsCurrentDrawingAppearance` wrapper: the point is
-/// that the view's dynamic colors resolve from its effective appearance.
+/// Renders `view` with `appearance` set on it through `cacheDisplay`, which
+/// like on-screen display calls `draw(_:)` with the view's effective
+/// appearance current, and returns every pixel that was actually painted
+/// (alpha above a hairline threshold). No `performAsCurrentDrawingAppearance`
+/// wrapper: the point is that the view's dynamic colors resolve from its
+/// effective appearance.
 private func paintedPixels(of view: NSView, under appearance: NSAppearance.Name) -> [Pixel] {
     view.appearance = NSAppearance(named: appearance)
     let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)!

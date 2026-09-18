@@ -78,13 +78,9 @@ package final class ChartView: NSView {
             return
         }
 
-        // Reserve a strip below the plot rect for x-axis tick labels and a
-        // gutter to its left for y-axis percent labels, so both draw clear
-        // of the grid/series instead of on top of the gradient fill.
-        let plotRect = CGRect(
-            x: bounds.minX + ChartRenderer.yAxisGutterWidth, y: bounds.minY,
-            width: bounds.width - ChartRenderer.yAxisGutterWidth,
-            height: bounds.height - ChartRenderer.tickLabelStripHeight)
+        // The renderer's reservations (tick strip below, label gutter left,
+        // label headroom above) keep every label clear of the grid/series.
+        let plotRect = ChartRenderer.plotRect(in: bounds)
 
         // Reversed: `ChartRenderer` paints back to front, so handing it the
         // series in reverse puts the model's first series (the primary one -

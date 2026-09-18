@@ -30,10 +30,11 @@ package struct ChartDrawModel {
 /// inside a flipped view (see `ChartGeometry`'s own doc comment:
 /// `plotRect.minY` is a displayed 100%, `plotRect.maxY` the 0% baseline)
 /// and that `plotRect` already excludes the tick-label strip below it (see
-/// `tickLabelStripHeight`) and the y-axis gutter to its left (see
-/// `yAxisGutterWidth`) — grid and series fills stop at `plotRect`'s edges,
-/// so a label drawn inside `plotRect` would sit on top of them instead of
-/// clear of them.
+/// `tickLabelStripHeight`), the y-axis gutter to its left (see
+/// `yAxisGutterWidth`) and the label headroom above it (see
+/// `yAxisLabelHeadroom`); `plotRect(in:)` builds such a rect. Grid and
+/// series fills stop at `plotRect`'s edges, so a label drawn inside
+/// `plotRect` would sit on top of them instead of clear of them.
 package enum ChartRenderer {
     private static let tickFontSize: CGFloat = 9
     private static let tickLabelAlpha: CGFloat = 0.5
@@ -45,7 +46,7 @@ package enum ChartRenderer {
     private static let seriesLineWidth: CGFloat = 1.5
     private static let fillAlphaAtLine: CGFloat = 0.28
     private static let fillAlphaAtBaseline: CGFloat = 0.06
-    private static let yAxisLabelFontSize: CGFloat = 9
+    package static let yAxisLabelFont = NSFont.systemFont(ofSize: 9)
     private static let yAxisLabelAlpha: CGFloat = 0.5
     private static let yAxisLabelGap: CGFloat = 4
 
@@ -61,6 +62,23 @@ package enum ChartRenderer {
     /// draw only inside it" rule `tickLabelStripHeight` follows for the
     /// x-axis.
     package static let yAxisGutterWidth: CGFloat = 30
+
+    /// Vertical space the caller must reserve above `plotRect`: the y-axis
+    /// labels are centered on their grid lines, so the "100%" label extends
+    /// half its height above the top grid line and would otherwise be
+    /// clipped at the view's edge. Half the font's ascender-to-descender
+    /// span, rounded up, covers that. The "0%" label's lower half lands in
+    /// the tick strip, which is already reserved.
+    package static let yAxisLabelHeadroom: CGFloat = ceil((yAxisLabelFont.ascender - yAxisLabelFont.descender) / 2)
+
+    /// `bounds` less the three reservations above: the rect the grid and
+    /// series draw in, with every label drawn clear of it.
+    package static func plotRect(in bounds: CGRect) -> CGRect {
+        CGRect(
+            x: bounds.minX + yAxisGutterWidth, y: bounds.minY + yAxisLabelHeadroom,
+            width: bounds.width - yAxisGutterWidth,
+            height: bounds.height - yAxisLabelHeadroom - tickLabelStripHeight)
+    }
 
     package static func draw(_ model: ChartDrawModel, plotRect: CGRect, scale: CGFloat) {
         drawGrid(model.gridColor, plotRect: plotRect, scale: scale)
@@ -161,7 +179,7 @@ package enum ChartRenderer {
     private static func drawYAxisLabels(_ labels: [(y: CGFloat, label: String)], plotRect: CGRect) {
         guard !labels.isEmpty else { return }
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: yAxisLabelFontSize),
+            .font: yAxisLabelFont,
             .foregroundColor: NSColor.secondaryLabelColor.withAlphaComponent(yAxisLabelAlpha),
         ]
 
