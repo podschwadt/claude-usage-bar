@@ -2,39 +2,38 @@ import AppKit
 
 /// Panel content views built from a `PanelModel`: the section header rule,
 /// the ring gauges row, and one label/value stat row.
-
-/// 70% white, per user request - semantic separator/tertiary tints read too
-/// dark against this panel's vibrancy material, full white too bright.
-fileprivate let captionTint = NSColor(white: 1, alpha: 0.7)
+///
+/// Every color set here adapts to the appearance — the `labelColor` family,
+/// the panel tints in Palette.swift, and the model's system tints — so the
+/// views carry no light/dark state; AppKit redraws them when the effective
+/// appearance changes. The one fixed color is a `barColorHex` override,
+/// which stays put by design.
 
 /// Centered "SESSION" / "THIS WEEK" style section title: uppercase, kerned,
-/// tertiary label color, with a hairline rule flanking each side.
-final class SectionHeaderView: NSView {
+/// in the panel caption tint, with a hairline rule flanking each side.
+package final class SectionHeaderView: NSView {
     private static let fontSize: CGFloat = 10
     private static let kern: CGFloat = 1.0
     private static let ruleGap: CGFloat = 8
-    /// 24% white, per user request — the flanking rules recede while the
-    /// title itself keeps the brighter `captionTint`.
-    private static let ruleTint = NSColor(white: 1, alpha: 0.24)
 
     private let attributedTitle: NSAttributedString
 
-    init(title: String, frame: CGRect) {
+    package init(title: String, frame: CGRect) {
         attributedTitle = NSAttributedString(
             string: title.uppercased(),
             attributes: [
                 .font: NSFont.systemFont(ofSize: Self.fontSize, weight: .medium),
-                .foregroundColor: captionTint,
+                .foregroundColor: NSColor.panelCaption,
                 .kern: Self.kern,
             ])
         super.init(frame: frame)
     }
 
-    required init?(coder: NSCoder) {
+    package required init?(coder: NSCoder) {
         fatalError("SectionHeaderView does not support coding")
     }
 
-    override func draw(_ dirtyRect: CGRect) {
+    package override func draw(_ dirtyRect: CGRect) {
         let labelSize = attributedTitle.size()
         let labelRect = CGRect(
             x: (bounds.width - labelSize.width) / 2, y: (bounds.height - labelSize.height) / 2,
@@ -48,7 +47,7 @@ final class SectionHeaderView: NSView {
         path.move(to: CGPoint(x: labelRect.maxX + Self.ruleGap, y: midY))
         path.line(to: CGPoint(x: bounds.width, y: midY))
         path.lineWidth = 1
-        Self.ruleTint.setStroke()
+        NSColor.panelRule.setStroke()
         path.stroke()
     }
 }
@@ -57,7 +56,7 @@ final class SectionHeaderView: NSView {
 /// spaced across the row, iStat-battery style: a track at low alpha, an arc
 /// over it covering the metric's displayed fraction, the displayed % big in
 /// the center and a small caption beneath.
-final class RingsRowView: NSView {
+package final class RingsRowView: NSView {
     private static let valueFontSize: CGFloat = 17
     private static let captionFontSize: CGFloat = 12
     private static let captionGap: CGFloat = 2
@@ -67,18 +66,18 @@ final class RingsRowView: NSView {
 
     private let rings: [RingModel]
 
-    override var isFlipped: Bool { true }
+    package override var isFlipped: Bool { true }
 
-    init(rings: [RingModel], frame: CGRect) {
+    package init(rings: [RingModel], frame: CGRect) {
         self.rings = rings
         super.init(frame: frame)
     }
 
-    required init?(coder: NSCoder) {
+    package required init?(coder: NSCoder) {
         fatalError("RingsRowView does not support coding")
     }
 
-    override func draw(_ dirtyRect: CGRect) {
+    package override func draw(_ dirtyRect: CGRect) {
         guard !rings.isEmpty else { return }
         let slotWidth = bounds.width / CGFloat(rings.count)
         let ringCenterY =
@@ -96,7 +95,7 @@ final class RingsRowView: NSView {
             string: label,
             attributes: [
                 .font: NSFont.systemFont(ofSize: labelFontSize, weight: .medium),
-                .foregroundColor: captionTint,
+                .foregroundColor: NSColor.panelCaption,
                 .kern: labelKern,
             ])
         let size = text.size()
@@ -136,7 +135,7 @@ final class RingsRowView: NSView {
                 string: ring.caption,
                 attributes: [
                     .font: NSFont.monospacedDigitSystemFont(ofSize: captionFontSize, weight: .medium),
-                    .foregroundColor: NSColor.white,
+                    .foregroundColor: NSColor.labelColor,
                 ])
 
         let valueSize = valueText.size()

@@ -13,7 +13,8 @@ S 95% W 82% F 100%     <- columns layout
 Left-click opens a history panel with usage graphs; right-click (or
 control-click) opens the settings menu. A two-line "Time Remaining" cell
 appears after the gauges by default: session time left as `H:MM` (e.g.
-`2:39`) over week time left in days (e.g. `2.3d`), in large bold white text.
+`2:39`) over week time left in days (e.g. `2.3d`), in large text that
+follows the menu bar appearance.
 
 ![Menu bar readout (rows layout) above the history panel](example.png)
 

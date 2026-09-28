@@ -1,43 +1,73 @@
 import AppKit
 
-/// Named bar-fill themes echoing the iStat Menus palette; the hex values are
-/// Apple's dark-appearance system tints, which stay readable on both light
-/// and dark menu bars.
+/// Named bar-fill themes echoing the iStat Menus palette, as Apple's system
+/// tints: dynamic colors that adapt to Light/Dark Mode and Increase Contrast.
 package enum BarColor: String, CaseIterable {
     case blue, green, yellow, orange, red, pink, purple, graphite
-
-    private static let blueHex = "0A84FF"
-    private static let greenHex = "32D74B"
-    private static let yellowHex = "FFD60A"
-    private static let orangeHex = "FF9F0A"
-    private static let redHex = "FF453A"
-    private static let pinkHex = "FF375F"
-    private static let purpleHex = "BF5AF2"
-    private static let graphiteHex = "98989D"
 
     package var title: String {
         rawValue.capitalized
     }
 
-    package var hex: String {
-        switch self {
-        case .blue: return Self.blueHex
-        case .green: return Self.greenHex
-        case .yellow: return Self.yellowHex
-        case .orange: return Self.orangeHex
-        case .red: return Self.redHex
-        case .pink: return Self.pinkHex
-        case .purple: return Self.purpleHex
-        case .graphite: return Self.graphiteHex
-        }
-    }
-
     package var nsColor: NSColor {
-        NSColor(hexString: hex) ?? .systemBlue
+        switch self {
+        case .blue: return .systemBlue
+        case .green: return .systemGreen
+        case .yellow: return .systemYellow
+        case .orange: return .systemOrange
+        case .red: return .systemRed
+        case .pink: return .systemPink
+        case .purple: return .systemPurple
+        case .graphite: return .systemGray
+        }
     }
 }
 
+/// The panel's custom tints as dynamic colors: AppKit resolves them against
+/// the drawing view's effective appearance inside `draw(_:)`, so views need
+/// no light/dark branching. The caption and rule tints keep their original
+/// white values as the dark variants; the light variants are black at a
+/// slightly lower alpha, since black on a light backdrop reads heavier than
+/// white on a dark one. The grid and hover box tints keep both of their
+/// original values.
 package extension NSColor {
+    /// Section titles and ring labels. Custom rather than a semantic label
+    /// tint: in the original Dark Mode tuning, `secondaryLabelColor` and
+    /// `tertiaryLabelColor` read too dim against the panel's vibrancy
+    /// material and full white too bright.
+    static let panelCaption = dynamic(
+        "panelCaption",
+        light: NSColor(white: 0, alpha: 0.6),
+        dark: NSColor(white: 1, alpha: 0.7))
+
+    /// Hairline rules flanking a section title; dimmer than the title.
+    static let panelRule = dynamic(
+        "panelRule",
+        light: NSColor(white: 0, alpha: 0.2),
+        dark: NSColor(white: 1, alpha: 0.24))
+
+    /// Chart gridlines.
+    static let chartGrid = dynamic(
+        "chartGrid",
+        light: NSColor(white: 0, alpha: 0.06),
+        dark: NSColor(white: 1, alpha: 0.06))
+
+    /// Backdrop of the chart's hover box: the appearance's base tone, so the
+    /// series-colored text on it keeps its contrast.
+    static let chartHoverBoxBackground = dynamic(
+        "chartHoverBoxBackground",
+        light: NSColor(white: 1, alpha: 0.8),
+        dark: NSColor(white: 0, alpha: 0.8))
+
+    /// `name` identifies the color when debugging. `bestMatch` folds each
+    /// appearance's high-contrast and vibrant variants into plain aqua or
+    /// darkAqua.
+    private static func dynamic(_ name: String, light: NSColor, dark: NSColor) -> NSColor {
+        NSColor(name: NSColor.Name(name)) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+        }
+    }
+
     /// ASCII hex digits only; `Character.isHexDigit` also admits fullwidth
     /// digit forms, which are not valid here.
     private static let hexDigits = Set("0123456789abcdefABCDEF")
@@ -46,7 +76,8 @@ package extension NSColor {
     /// Each of the 6 characters must be an ASCII hex digit: checking that
     /// explicitly (rather than trusting `UInt32(_:radix:)`) rejects a value
     /// like "+0A84F", which that initializer would otherwise parse as a
-    /// signed integer.
+    /// signed integer. Backs the `barColorHex` override, a fixed color by
+    /// design.
     convenience init?(hexString: String) {
         var digits = hexString
         if digits.hasPrefix("#") { digits.removeFirst() }

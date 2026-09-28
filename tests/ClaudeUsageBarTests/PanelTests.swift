@@ -297,6 +297,30 @@ final class PanelTests: XCTestCase {
             "footer is 'Updated HH:mm:ss' from queried_at when present")
     }
 
+    // MARK: - ChartRenderer.plotRect: the reservations around the plot keep
+    // every label inside the chart's bounds.
+
+    func testChartPlotRectKeepsYAxisLabelsInsideBounds() {
+        let bounds = CGRect(x: 0, y: 0, width: PanelGeometry.contentWidth, height: PanelGeometry.chartHeight)
+        let plotRect = ChartRenderer.plotRect(in: bounds)
+        let labelHeight = NSAttributedString(string: "100%", attributes: [.font: ChartRenderer.yAxisLabelFont])
+            .size().height
+        let gridYs = ChartGeometry.gridYs(rect: plotRect)
+
+        // Labels are centered on their grid lines: the top one reaches half
+        // a label above the first line, the bottom one half a label below
+        // the last, both of which must stay within the chart's bounds.
+        XCTAssertTrue(gridYs.first! - labelHeight / 2 >= bounds.minY, "the 100% label is not clipped at the top")
+        XCTAssertTrue(gridYs.last! + labelHeight / 2 <= bounds.maxY, "the 0% label is not clipped at the bottom")
+        XCTAssertTrue(approxEqual(plotRect.minX, ChartRenderer.yAxisGutterWidth), "the gutter is reserved on the left")
+        XCTAssertTrue(
+            approxEqual(plotRect.maxY, bounds.maxY - ChartRenderer.tickLabelStripHeight),
+            "the tick strip is reserved below")
+        XCTAssertTrue(
+            approxEqual(plotRect.height, 110 - ChartRenderer.tickLabelStripHeight),
+            "the panel's chart height grows by the headroom, so the plot itself keeps its height")
+    }
+
     // MARK: - ChartRenderer smoke test: series must actually change the
     // render, not just the grid. Counting non-transparent pixels for a
     // grid-only render vs. the same render with series added means this

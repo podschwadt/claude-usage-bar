@@ -2,7 +2,8 @@ import CoreGraphics
 
 /// Layout constants and frame math for the history panel: all section
 /// frames, top-down, in a flipped container (y grows downward from the
-/// panel's top edge). Pure math, unit-testable without AppKit.
+/// panel's top edge). Pure math, unit-testable without AppKit, except that
+/// `chartHeight` reads one font metric through `ChartRenderer`.
 package enum PanelGeometry {
 
     package static let contentWidth: CGFloat = 280
@@ -14,7 +15,9 @@ package enum PanelGeometry {
     package static let sideMargin: CGFloat = 16
     package static let cornerRadius: CGFloat = 12
     package static let sectionHeaderHeight: CGFloat = 30
-    package static let chartHeight: CGFloat = 110
+    /// 110 for the plot and tick strip, plus the headroom the chart reserves
+    /// above its top grid line, so that reservation does not shrink the plot.
+    package static let chartHeight: CGFloat = 110 + ChartRenderer.yAxisLabelHeadroom
     package static let footerTopGap: CGFloat = 8
     package static let footerHeight: CGFloat = 16
 

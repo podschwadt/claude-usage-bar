@@ -27,7 +27,9 @@ parser/claude_usage.py --fixture f.txt  # parse a saved capture
 ```
 
 - Building needs only Xcode Command Line Tools; `swift test` needs full
-  Xcode.app (XCTest ships with Xcode, not the CLT).
+  Xcode.app (XCTest ships with Xcode, not the CLT). If `xcode-select` points
+  at the CLT, run tests with
+  `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`.
 - The parser is copied into the app bundle at build time: rebuild after
   editing `parser/claude_usage.py`.
 - The lowercase `tests/` directory is deliberate; `Package.swift` sets all
